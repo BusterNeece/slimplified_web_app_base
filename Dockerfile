@@ -40,7 +40,7 @@ RUN composer install  \
     --no-scripts
 
 # We need to copy our whole application so that we can generate the autoload file inside the vendor folder.
-COPY --chown=app:app . .
+COPY --chown=app:app ./www/ .
 
 RUN composer dump-autoload --optimize --classmap-authoritative
 

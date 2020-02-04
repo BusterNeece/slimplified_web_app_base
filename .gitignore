@@ -1,8 +1,5 @@
-/Caddyfile
-/.env
 /.idea
-/public/bundles/
-/var/
-/vendor/
-.phpunit
-/phpunit.xml
+
+/www/vendor/
+/www/.phpunit
+/www/phpunit.xml
