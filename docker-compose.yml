@@ -1,14 +1,61 @@
-version: '2.2'
+version: '3.7'
 
 services:
-  cli:
+  nginx_proxy:
+    image: jwilder/nginx-proxy
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    environment:
+      DEFAULT_HOST: app.local
+    depends_on:
+      - backend
+    restart: always
+
+  web:
     image: slvreagle23/slimplified_web_app:latest
     build:
       context: .
+    env_file: app.env
+    environment:
+      VIRTUAL_HOST: app.local
+      HTTPS_METHOD: noredirect
     volumes:
-      - ./:/app
-      - composer_data:/tmp
-    command: composer test
+      - ./:/var/app/www
+      - tmp_data:/var/app/www_tmp
+    depends_on:
+      - mariadb
+      - redis
+    restart: always
+    logging: &default-logging
+      options:
+        max-size: "1m"
+        max-file: "5"
+
+  mariadb:
+    image: mariadb:10.2
+    volumes:
+      - db_data:/var/lib/mysql
+    env_file: app.env
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: yes
+    restart: always
+    logging: *default-logging
+
+  redis:
+    image: redis:5-alpine
+    sysctls:
+      net.core.somaxconn: 1024
+    volumes:
+      - redis_data:/data
+    restart: always
+    logging: *default-logging
 
 volumes:
-  composer_data: {}
+  db_data: {}
+  letsencrypt: {}
+  tmp_data: {}
+  redis_data: {}

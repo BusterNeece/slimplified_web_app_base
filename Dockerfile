@@ -42,5 +42,7 @@ RUN composer dump-autoload --optimize --classmap-authoritative
 # END Operations as `app` user
 #
 
+EXPOSE 80, 443
+
 USER root
 CMD ["/usr/local/bin/my_init"]
