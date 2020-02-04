@@ -1,0 +1,16 @@
+name: Test Suite
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      
+    - name: Run test suite
+      run: |
+        docker-compose build
+        docker-compose run --rm --user="app" web composer test
