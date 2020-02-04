@@ -12,7 +12,7 @@ services:
     environment:
       DEFAULT_HOST: app.local
     depends_on:
-      - backend
+      - web
     restart: always
 
   web:
@@ -41,7 +41,7 @@ services:
       - db_data:/var/lib/mysql
     env_file: app.env
     environment:
-      MYSQL_RANDOM_ROOT_PASSWORD: yes
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
     restart: always
     logging: *default-logging
 

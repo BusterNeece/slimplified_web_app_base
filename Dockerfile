@@ -16,6 +16,12 @@ RUN chmod a+x /bd_build/*.sh \
     && /bd_build/cleanup.sh \
     && rm -rf /bd_build
 
+# Install Dockerize
+ENV DOCKERIZE_VERSION v0.6.1
+RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
+    && tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
+    && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+
 #
 # START Operations as `app` user
 #
@@ -45,4 +51,8 @@ RUN composer dump-autoload --optimize --classmap-authoritative
 EXPOSE 80, 443
 
 USER root
+
+ENTRYPOINT ["dockerize",\
+    "-wait","tcp://mariadb:3306",\
+    "-timeout","40s"]
 CMD ["/usr/local/bin/my_init"]
