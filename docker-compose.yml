@@ -1,0 +1,14 @@
+version: '2.2'
+
+services:
+  cli:
+    image: slvreagle23/slimplified_web_app:latest
+    build:
+      context: .
+    volumes:
+      - ./:/app
+      - composer_data:/tmp
+    command: composer test
+
+volumes:
+  composer_data: {}

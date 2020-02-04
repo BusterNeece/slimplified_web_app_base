@@ -1,0 +1,10 @@
+parameters:
+    level: 2
+
+    paths:
+        - src
+
+    universalObjectCratesClasses:
+        - App\Session\NamespaceInterface
+        - App\View
+        - Doctrine\Common\Persistence\Mapping\ClassMetadata

@@ -1,0 +1,8 @@
+/Caddyfile
+/.env
+/.idea
+/public/bundles/
+/var/
+/vendor/
+.phpunit
+/phpunit.xml
