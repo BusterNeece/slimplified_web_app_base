@@ -19,7 +19,7 @@ services:
     image: slvreagle23/slimplified_web_app:latest
     build:
       context: .
-    env_file: www/app.env
+    env_file: app.env
     environment:
       VIRTUAL_HOST: app.local
       HTTPS_METHOD: noredirect
@@ -39,7 +39,7 @@ services:
     image: mariadb:10.2
     volumes:
       - db_data:/var/lib/mysql
-    env_file: www/app.env
+    env_file: app.env
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
     restart: always

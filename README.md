@@ -4,7 +4,7 @@
 
 This repository is a base template of a web application powered by the following components:
 
- - [The Slim 3 PHP framework](https://github.com/slimphp/Slim)
+ - [The Slim 4 PHP framework](https://github.com/slimphp/Slim)
  - [Doctrine ORM](https://github.com/doctrine/orm)
  - [Whoops](https://github.com/filp/whoops)
  - [Plates Template Engine](https://github.com/thephpleague/plates)
