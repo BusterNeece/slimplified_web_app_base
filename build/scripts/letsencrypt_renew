@@ -1,9 +1,0 @@
-#!/usr/bin/env sh
-
-if [ `whoami` != 'app' ]; then
-    echo 'This script must be run as the "app" user. Rerunning...'
-    sudo -E -u app letsencrypt_renew $@
-    exit 1
-fi
-
-certbot renew --webroot -w /var/www/letsencrypt $*
