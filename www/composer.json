@@ -72,8 +72,13 @@
       "App\\": "src"
     }
   },
+  "bin": [
+    "bin/console"
+  ],
   "config": {
-    "preferred-install": "dist"
+    "preferred-install": "dist",
+    "discard-changes": true,
+    "sort-packages": true
   },
   "prefer-stable": true,
   "minimum-stability": "dev"
