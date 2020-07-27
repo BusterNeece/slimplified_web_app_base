@@ -1,12 +1,15 @@
 <?php
 namespace App;
 
+use App\Http\Factory\ServerRequestFactory;
 use DI;
 use Doctrine\Common\Annotations\AnnotationRegistry;
 use Invoker;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Log\LoggerInterface;
+use Slim\App;
+use Slim\Factory\ServerRequestCreatorFactory;
 use Slim\Interfaces\CallableResolverInterface;
 use Slim\Interfaces\MiddlewareDispatcherInterface;
 use Slim\Interfaces\RouteCollectorInterface;
@@ -49,9 +52,11 @@ class AppFactory
         // Register static logger.
         Logger::setInstance($di->get(LoggerInterface::class));
 
+        ServerRequestCreatorFactory::setSlimHttpDecoratorsAutomaticDetection(false);
+        ServerRequestCreatorFactory::setServerRequestCreator(new ServerRequestFactory);
+
         $app = self::createFromContainer($di);
         $di->set(App::class, $app);
-        $di->set(\Slim\App::class, $app);
 
         self::updateRouteHandling($app);
         self::buildRoutes($app);

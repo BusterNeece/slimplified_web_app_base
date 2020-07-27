@@ -1,7 +1,6 @@
 <?php
 namespace App\Middleware;
 
-use App\Http\RequestHelper;
 use App\Http\RouterInterface;
 use App\Http\ServerRequest;
 use Psr\Http\Message\ResponseInterface;
@@ -14,8 +13,7 @@ use Psr\Http\Server\RequestHandlerInterface;
  */
 class InjectRouter implements MiddlewareInterface
 {
-    /** @var RouterInterface */
-    protected $router;
+    protected RouterInterface $router;
 
     public function __construct(RouterInterface $router)
     {

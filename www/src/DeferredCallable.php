@@ -14,15 +14,10 @@ use Slim\Interfaces\CallableResolverInterface;
 
 class DeferredCallable
 {
-    /**
-     * @var callable|string
-     */
+    /** @var callable|string */
     protected $callable;
 
-    /**
-     * @var CallableResolverInterface|null
-     */
-    protected $callableResolver;
+    protected ?CallableResolverInterface $callableResolver;
 
     /**
      * @param callable|string $callable

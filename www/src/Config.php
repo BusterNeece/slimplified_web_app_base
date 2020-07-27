@@ -5,7 +5,7 @@ use const EXTR_OVERWRITE;
 
 class Config
 {
-    protected $_base_folder;
+    protected string $_base_folder;
 
     public function __construct($base_folder)
     {

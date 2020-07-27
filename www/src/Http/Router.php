@@ -14,19 +14,12 @@ use Slim\Routing\RouteContext;
 
 class Router implements RouterInterface
 {
-    /** @var RouteParserInterface */
-    protected $route_parser;
+    protected RouteParserInterface $route_parser;
 
-    /** @var Settings */
-    protected $settings;
+    protected Settings $settings;
 
-    /** @var ServerRequestInterface */
-    protected $current_request;
+    protected ServerRequestInterface $current_request;
 
-    /**
-     * @param Settings $settings
-     * @param RouteParserInterface $route_parser
-     */
     public function __construct(Settings $settings, RouteParserInterface $route_parser)
     {
         $this->settings = $settings;

@@ -5,9 +5,9 @@ use App\Exception;
 use App\RateLimit;
 use App\Session;
 use App\View;
-use Zend\Expressive\Session\SessionInterface;
+use Mezzio\Session\SessionInterface;
 
-class ServerRequest extends \Slim\Http\ServerRequest
+final class ServerRequest extends \Slim\Http\ServerRequest
 {
     public const ATTR_VIEW = 'app_view';
     public const ATTR_SESSION = 'app_session';
@@ -16,58 +16,63 @@ class ServerRequest extends \Slim\Http\ServerRequest
     public const ATTR_ROUTER = 'app_router';
     public const ATTR_RATE_LIMIT = 'app_rate_limit';
 
-    /**
-     * @return View
-     * @throws Exception
-     */
     public function getView(): View
     {
         return $this->getAttributeOfClass(self::ATTR_VIEW, View::class);
     }
 
-    /**
-     * @return SessionInterface
-     * @throws Exception
-     */
     public function getSession(): SessionInterface
     {
         return $this->getAttributeOfClass(self::ATTR_SESSION, SessionInterface::class);
     }
 
-    /**
-     * @return Session\Csrf
-     * @throws Exception
-     */
     public function getCsrf(): Session\Csrf
     {
         return $this->getAttributeOfClass(self::ATTR_SESSION_CSRF, Session\Csrf::class);
     }
 
-    /**
-     * @return Session\Flash
-     * @throws Exception
-     */
     public function getFlash(): Session\Flash
     {
         return $this->getAttributeOfClass(self::ATTR_SESSION_FLASH, Session\Flash::class);
     }
 
-    /**
-     * @return RouterInterface
-     * @throws Exception
-     */
     public function getRouter(): RouterInterface
     {
         return $this->getAttributeOfClass(self::ATTR_ROUTER, RouterInterface::class);
     }
 
-    /**
-     * @return RateLimit
-     * @throws Exception
-     */
     public function getRateLimit(): RateLimit
     {
         return $this->getAttributeOfClass(self::ATTR_RATE_LIMIT, RateLimit::class);
+    }
+
+    /**
+     * @param string $attr
+     * @param string $class_name
+     *
+     * @return mixed
+     * @throws Exception\InvalidRequestAttribute
+     */
+    protected function getAttributeOfClass($attr, $class_name)
+    {
+        $object = $this->serverRequest->getAttribute($attr);
+
+        if (empty($object)) {
+            throw new Exception\InvalidRequestAttribute(sprintf(
+                'Attribute "%s" is required and is empty in this request',
+                $attr
+            ));
+        }
+
+        if (!($object instanceof $class_name)) {
+            throw new Exception\InvalidRequestAttribute(sprintf(
+                'Attribute "%s" must be of type "%s".',
+                $attr,
+                $class_name
+            ));
+        }
+
+        return $object;
     }
 
     /**
@@ -85,22 +90,5 @@ class ServerRequest extends \Slim\Http\ServerRequest
             ?? $params['HTTP_FORWARDED']
             ?? $params['REMOTE_ADDR']
             ?? null;
-    }
-
-    /**
-     * @param string $attr
-     * @param string $class_name
-     *
-     * @return mixed
-     * @throws Exception
-     */
-    protected function getAttributeOfClass($attr, $class_name)
-    {
-        $object = $this->serverRequest->getAttribute($attr);
-        if ($object instanceof $class_name) {
-            return $object;
-        }
-
-        throw new Exception(sprintf('Attribute %s must be of type %s.', $attr, $class_name));
     }
 }

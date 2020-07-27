@@ -3,41 +3,36 @@ namespace App\Http;
 
 use App\Exception;
 use App\Settings;
+use Monolog\Logger;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use Slim\App;
 use Slim\Exception\HttpException;
-use stdClass;
 use Throwable;
 
 class ErrorHandler extends \Slim\Handlers\ErrorHandler
 {
-    /** @var LoggerInterface */
-    protected $logger;
+    protected bool $returnJson = false;
 
-    /** @var Settings */
-    protected $settings;
+    protected bool $showDetailed = false;
 
-    /** @var bool */
-    protected $returnJson = false;
+    protected string $loggerLevel = LogLevel::ERROR;
 
-    /** @var bool */
-    protected $showDetailed = false;
+    protected Router $router;
 
-    /** @var string */
-    protected $loggerLevel = LogLevel::ERROR;
+    protected Settings $settings;
 
     public function __construct(
         App $app,
-        LoggerInterface $logger,
+        Logger $logger,
+        Router $router,
         Settings $settings
     ) {
-        $this->logger = $logger;
-        $this->settings = $settings;
+        parent::__construct($app->getCallableResolver(), $app->getResponseFactory(), $logger);
 
-        parent::__construct($app->getCallableResolver(), $app->getResponseFactory());
+        $this->settings = $settings;
+        $this->router = $router;
     }
 
     public function __invoke(
@@ -55,49 +50,12 @@ class ErrorHandler extends \Slim\Handlers\ErrorHandler
 
         $this->showDetailed = (!$this->settings->isProduction() && !in_array($this->loggerLevel,
                 [LogLevel::DEBUG, LogLevel::INFO, LogLevel::NOTICE], true));
-        $this->returnJson = $this->_shouldReturnJson($request);
+        $this->returnJson = $this->shouldReturnJson($request);
 
         return parent::__invoke($request, $exception, $displayErrorDetails, $logErrors, $logErrorDetails);
     }
 
-    /**
-     * @return bool
-     */
-    public function returnJson(): bool
-    {
-        return $this->returnJson;
-    }
-
-    /**
-     * @param bool $returnJson
-     */
-    public function setReturnJson(bool $returnJson): void
-    {
-        $this->returnJson = $returnJson;
-    }
-
-    /**
-     * @return bool
-     */
-    public function showDetailed(): bool
-    {
-        return $this->showDetailed;
-    }
-
-    /**
-     * @param bool $showDetailed
-     */
-    public function setShowDetailed(bool $showDetailed): void
-    {
-        $this->showDetailed = $showDetailed;
-    }
-
-    /**
-     * @param ServerRequestInterface $req
-     *
-     * @return bool
-     */
-    protected function _shouldReturnJson(ServerRequestInterface $req): bool
+    protected function shouldReturnJson(ServerRequestInterface $req): bool
     {
         $xhr = $req->getHeaderLine('X-Requested-With') === 'XMLHttpRequest';
 
@@ -142,9 +100,6 @@ class ErrorHandler extends \Slim\Handlers\ErrorHandler
         ]);
     }
 
-    /**
-     * @inheritDoc
-     */
     protected function respond(): ResponseInterface
     {
         // Special handling for cURL requests.
@@ -160,45 +115,23 @@ class ErrorHandler extends \Slim\Handlers\ErrorHandler
         }
 
         if ($this->returnJson) {
-            $api_response = $this->getErrorApiResponse(
-                $this->exception->getCode(),
-                $this->exception->getMessage(),
-                ($this->showDetailed) ? $this->exception->getTrace() : []
-            );
+            $response = $this->responseFactory->createResponse($this->statusCode);
 
-            return $this->withJson(
-                $this->responseFactory->createResponse(500),
-                $api_response
-            );
+            return $this->withJson($response, [
+                'success' => false,
+                'message' => $this->exception->getMessage(),
+                'code' => $this->exception->getCode(),
+            ]);
         }
 
         return parent::respond();
     }
 
-    /**
-     * @param int $code
-     * @param string $message
-     * @param array $stack_trace
-     *
-     * @return stdClass
-     */
-    protected function getErrorApiResponse($code = 500, $message = 'General Error', $stack_trace = []): stdClass
-    {
-        $api = new stdClass;
-        $api->success = false;
-        $api->code = (int)$code;
-        $api->message = (string)$message;
-        $api->stack_trace = (array)$stack_trace;
-
-        return $api;
-    }
-
     protected function withJson(ResponseInterface $response, $data): ResponseInterface
     {
-        $json = (string)json_encode($data);
+        $json = (string)json_encode($data, JSON_THROW_ON_ERROR);
         $response->getBody()->write($json);
 
         return $response->withHeader('Content-Type', 'application/json;charset=utf-8');
     }
-
 }

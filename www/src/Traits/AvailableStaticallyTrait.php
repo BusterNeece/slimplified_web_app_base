@@ -3,7 +3,6 @@ namespace App\Traits;
 
 trait AvailableStaticallyTrait
 {
-    /** @var static */
     protected static $instance;
 
     /**

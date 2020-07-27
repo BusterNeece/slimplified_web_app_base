@@ -2,8 +2,9 @@
 namespace App;
 
 use App\Traits\AvailableStaticallyTrait;
+use Doctrine\Common\Collections\ArrayCollection;
 
-class Settings extends Collection
+class Settings extends ArrayCollection
 {
     use AvailableStaticallyTrait;
 
@@ -31,7 +32,7 @@ class Settings extends Collection
     public const ENABLE_REDIS = 'enable_redis';
 
     // Default settings
-    protected $data = [
+    protected array $defaults = [
         self::APP_NAME => 'Application',
         self::APP_ENV => self::ENV_PRODUCTION,
 
@@ -44,40 +45,46 @@ class Settings extends Collection
         self::ENABLE_REDIS => true,
     ];
 
+    public function __construct(array $elements = [])
+    {
+        $elements = array_merge($this->defaults, $elements);
+        parent::__construct($elements);
+    }
+
     public function isProduction(): bool
     {
-        if (isset($this->data[self::APP_ENV])) {
-            return (self::ENV_PRODUCTION === $this->data[self::APP_ENV]);
+        if ($this->containsKey(self::APP_ENV)) {
+            return (self::ENV_PRODUCTION === $this->get(self::APP_ENV));
         }
         return true;
     }
 
     public function isTesting(): bool
     {
-        if (isset($this->data[self::APP_ENV])) {
-            return (self::ENV_TESTING === $this->data[self::APP_ENV]);
+        if ($this->containsKey(self::APP_ENV)) {
+            return (self::ENV_TESTING === $this->get(self::APP_ENV));
         }
         return false;
     }
 
     public function isDocker(): bool
     {
-        return (bool)($this->data[self::IS_DOCKER] ?? true);
+        return (bool)($this->get(self::IS_DOCKER) ?? true);
     }
 
     public function isCli(): bool
     {
-        return $this->data[self::IS_CLI] ?? ('cli' === PHP_SAPI);
+        return $this->get(self::IS_CLI) ?? ('cli' === PHP_SAPI);
     }
 
     public function enableDatabase(): bool
     {
-        return (bool)($this->data[self::ENABLE_DATABASE] ?? true);
+        return (bool)($this->get(self::ENABLE_DATABASE) ?? true);
     }
 
     public function enableRedis(): bool
     {
-        return (bool)($this->data[self::ENABLE_REDIS] ?? true);
+        return (bool)($this->get(self::ENABLE_REDIS) ?? true);
     }
 
     /**
@@ -85,7 +92,7 @@ class Settings extends Collection
      */
     public function getBaseDirectory(): string
     {
-        return $this->data[self::BASE_DIR];
+        return $this->get(self::BASE_DIR);
     }
 
     /**
@@ -93,7 +100,7 @@ class Settings extends Collection
      */
     public function getTempDirectory(): string
     {
-        return $this->data[self::TEMP_DIR];
+        return $this->get(self::TEMP_DIR);
     }
 
     /**
@@ -101,7 +108,7 @@ class Settings extends Collection
      */
     public function getConfigDirectory(): string
     {
-        return $this->data[self::CONFIG_DIR];
+        return $this->get(self::CONFIG_DIR);
     }
 
     /**
@@ -109,6 +116,6 @@ class Settings extends Collection
      */
     public function getViewsDirectory(): string
     {
-        return $this->data[self::VIEWS_DIR];
+        return $this->get(self::VIEWS_DIR);
     }
 }

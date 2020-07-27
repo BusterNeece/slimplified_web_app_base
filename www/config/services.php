@@ -56,7 +56,6 @@ return [
     Doctrine\DBAL\Connection::class => function (Doctrine\ORM\EntityManager $em) {
         return $em->getConnection();
     },
-    'db' => DI\Get(Doctrine\DBAL\Connection::class),
 
     // Console
     App\Console\Application::class => function (DI\Container $di, App\EventDispatcher $dispatcher) {
@@ -71,88 +70,74 @@ return [
 
     // Doctrine cache
     Doctrine\Common\Cache\Cache::class => function (Psr\Cache\CacheItemPoolInterface $cachePool) {
-        return new Cache\Bridge\Doctrine\DoctrineCacheBridge(new Cache\Prefixed\PrefixedCachePool($cachePool, 'doctrine|'));
+        return new Cache\Bridge\Doctrine\DoctrineCacheBridge(new Cache\Prefixed\PrefixedCachePool($cachePool,
+            'doctrine|'));
     },
 
     // Doctrine Entity Manager
-    Doctrine\ORM\EntityManager::class => function (
-        Doctrine\Common\Cache\Cache $doctrine_cache,
+    App\Doctrine\DecoratedEntityManager::class => function (
+        Doctrine\Common\Cache\Cache $doctrineCache,
         Doctrine\Common\Annotations\Reader $reader,
         App\Settings $settings
     ) {
-        $defaults = [
-            'cache' => $doctrine_cache,
-            'autoGenerateProxies' => !$settings->isProduction(),
-            'proxyNamespace' => 'AppProxy',
-            'proxyPath' => $settings->getTempDirectory() . '/proxies',
-            'modelPath' => $settings->getBaseDirectory() . '/src/Entity',
-            'useSimpleAnnotations' => false,
-            'conn' => [
-                'host' => $_ENV['MYSQL_HOST'] ?? 'mariadb',
-                'port' => $_ENV['MYSQL_PORT'] ?? 3306,
-                'dbname' => $_ENV['MYSQL_DATABASE'],
-                'user' => $_ENV['MYSQL_USER'],
-                'password' => $_ENV['MYSQL_PASSWORD'],
-                'driver' => 'pdo_mysql',
+        $connectionOptions = [
+            'host' => $_ENV['MYSQL_HOST'] ?? 'mariadb',
+            'port' => $_ENV['MYSQL_PORT'] ?? 3306,
+            'dbname' => $_ENV['MYSQL_DATABASE'],
+            'user' => $_ENV['MYSQL_USER'],
+            'password' => $_ENV['MYSQL_PASSWORD'],
+            'driver' => 'pdo_mysql',
+            'charset' => 'utf8mb4',
+            'defaultTableOptions' => [
                 'charset' => 'utf8mb4',
-                'defaultTableOptions' => [
-                    'charset' => 'utf8mb4',
-                    'collate' => 'utf8mb4_general_ci',
-                ],
-                'driverOptions' => [
-                    // PDO::MYSQL_ATTR_INIT_COMMAND = 1002;
-                    1002 => 'SET NAMES utf8mb4 COLLATE utf8mb4_general_ci',
-                ],
-                'platform' => new Doctrine\DBAL\Platforms\MariaDb1027Platform(),
+                'collate' => 'utf8mb4_general_ci',
             ],
+            'driverOptions' => [
+                // PDO::MYSQL_ATTR_INIT_COMMAND = 1002;
+                1002 => 'SET NAMES utf8mb4 COLLATE utf8mb4_general_ci',
+            ],
+            'platform' => new Doctrine\DBAL\Platforms\MariaDb1027Platform(),
         ];
 
         if (!$settings[App\Settings::IS_DOCKER]) {
-            $defaults['conn']['host'] = $_ENV['db_host'] ?? 'localhost';
-            $defaults['conn']['port'] = $_ENV['db_port'] ?? '3306';
-            $defaults['conn']['dbname'] = $_ENV['db_name'] ?? 'app';
-            $defaults['conn']['user'] = $_ENV['db_username'] ?? 'app';
-            $defaults['conn']['password'] = $_ENV['db_password'];
+            $connectionOptions['host'] = $_ENV['db_host'] ?? 'localhost';
+            $connectionOptions['port'] = $_ENV['db_port'] ?? '3306';
+            $connectionOptions['dbname'] = $_ENV['db_name'] ?? 'azuracast';
+            $connectionOptions['user'] = $_ENV['db_username'] ?? 'azuracast';
+            $connectionOptions['password'] = $_ENV['db_password'];
         }
-
-        $app_options = $settings[App\Settings::DOCTRINE_OPTIONS] ?? [];
-        $options = array_merge($defaults, $app_options);
 
         try {
             // Fetch and store entity manager.
-            $config = new Doctrine\ORM\Configuration;
+            $config = Doctrine\ORM\Tools\Setup::createConfiguration(
+                Doctrine\Common\Proxy\AbstractProxyFactory::AUTOGENERATE_FILE_NOT_EXISTS,
+                $settings->getTempDirectory() . '/proxies',
+                $doctrineCache
+            );
 
-            if ($options['useSimpleAnnotations']) {
-                $metadata_driver = $config->newDefaultAnnotationDriver((array)$options['modelPath'],
-                    $options['useSimpleAnnotations']);
-            } else {
-                $metadata_driver = new Doctrine\ORM\Mapping\Driver\AnnotationDriver(
-                    $reader,
-                    (array)$options['modelPath']
-                );
-            }
-            $config->setMetadataDriverImpl($metadata_driver);
+            $annotationDriver = new Doctrine\ORM\Mapping\Driver\AnnotationDriver(
+                $reader,
+                [$settings->getBaseDirectory() . '/src/Entity']
+            );
+            $config->setMetadataDriverImpl($annotationDriver);
 
-            $config->setMetadataCacheImpl($options['cache']);
-            $config->setQueryCacheImpl($options['cache']);
-            $config->setResultCacheImpl($options['cache']);
+            // Debug mode:
+            // $config->setSQLLogger(new Doctrine\DBAL\Logging\EchoSQLLogger);
 
-            $config->setProxyDir($options['proxyPath']);
-            $config->setProxyNamespace($options['proxyNamespace']);
-            $config->setAutoGenerateProxyClasses(Doctrine\Common\Proxy\AbstractProxyFactory::AUTOGENERATE_FILE_NOT_EXISTS);
+            $eventManager = new Doctrine\Common\EventManager;
 
-            if (isset($options['conn']['debug']) && $options['conn']['debug']) {
-                $config->setSQLLogger(new Doctrine\DBAL\Logging\EchoSQLLogger);
-            }
-
-            $config->addCustomNumericFunction('RAND', App\Doctrine\Functions\Rand::class);
-
-            return Doctrine\ORM\EntityManager::create($options['conn'], $config, new Doctrine\Common\EventManager);
+            return new App\Doctrine\DecoratedEntityManager(function () use (
+                $connectionOptions,
+                $config,
+                $eventManager
+            ) {
+                return Doctrine\ORM\EntityManager::create($connectionOptions, $config, $eventManager);
+            });
         } catch (Exception $e) {
             throw new App\Exception\BootstrapException($e->getMessage());
         }
     },
-    'em' => DI\Get(Doctrine\ORM\EntityManager::class),
+    Doctrine\ORM\EntityManagerInterface::class => DI\Get(App\Doctrine\DecoratedEntityManager::class),
 
     // Event Dispatcher
     App\EventDispatcher::class => function (Slim\App $app) {
@@ -184,12 +169,6 @@ return [
     },
     Psr\Log\LoggerInterface::class => DI\get(Monolog\Logger::class),
 
-    // Middleware
-    App\Middleware\InjectRateLimit::class => DI\autowire(),
-    App\Middleware\InjectRouter::class => DI\autowire(),
-    App\Middleware\InjectSession::class => DI\autowire(),
-    App\Middleware\EnableView::class => DI\autowire(),
-
     // Session save handler middleware
     Mezzio\Session\SessionPersistenceInterface::class => function (Cache\Adapter\Redis\RedisCachePool $redisPool) {
         return new Mezzio\Session\Cache\CacheSessionPersistence(
@@ -202,9 +181,6 @@ return [
         );
     },
 
-    // Rate limiter
-    App\RateLimit::class => DI\autowire(),
-
     // Redis cache
     Redis::class => function (App\Settings $settings) {
         $redis_host = $settings[App\Settings::IS_DOCKER] ? 'redis' : 'localhost';
@@ -216,37 +192,13 @@ return [
         return $redis;
     },
 
-    // View (Plates Templates)
-    App\View::class => function (
-        Psr\Container\ContainerInterface $di,
-        App\Settings $settings,
-        App\Http\RouterInterface $router,
-        App\EventDispatcher $dispatcher
-    ) {
-        $view = new App\View($settings[App\Settings::VIEWS_DIR], 'phtml');
-
-        $view->registerFunction('service', function ($service) use ($di) {
-            return $di->get($service);
-        });
-
-        $view->registerFunction('escapeJs', function ($string) {
-            return json_encode($string, JSON_THROW_ON_ERROR, 512);
-        });
-
-        $view->addData([
-            'settings' => $settings,
-            'router' => $router,
-        ]);
-
-        $dispatcher->dispatch(new App\Event\BuildView($view));
-
-        return $view;
-    },
-
     // Doctrine annotations reader
-    Doctrine\Common\Annotations\Reader::class => function (Doctrine\Common\Cache\Cache $doctrine_cache, App\Settings $settings) {
+    Doctrine\Common\Annotations\Reader::class => function (
+        Doctrine\Common\Cache\Cache $doctrine_cache,
+        App\Settings $settings
+    ) {
         return new Doctrine\Common\Annotations\CachedReader(
-            new \Doctrine\Common\Annotations\AnnotationReader,
+            new Doctrine\Common\Annotations\AnnotationReader,
             $doctrine_cache,
             !$settings->isProduction()
         );
@@ -266,7 +218,11 @@ return [
             new App\Normalizer\DoctrineEntityNormalizer($em, $annotation_reader, $meta_factory),
             new Symfony\Component\Serializer\Normalizer\ObjectNormalizer($meta_factory),
         ];
-        return new Symfony\Component\Serializer\Serializer($normalizers);
+        $encoders = [
+            new Symfony\Component\Serializer\Encoder\JsonEncoder,
+        ];
+
+        return new Symfony\Component\Serializer\Serializer($normalizers, $encoders);
     },
 
     // Symfony Validator

@@ -7,4 +7,3 @@ parameters:
     universalObjectCratesClasses:
         - App\Session\NamespaceInterface
         - App\View
-        - Doctrine\Common\Persistence\Mapping\ClassMetadata
