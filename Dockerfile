@@ -50,7 +50,7 @@ RUN composer dump-autoload --optimize --classmap-authoritative
 
 USER root
 
-EXPOSE 80 443
+EXPOSE 80
 
 ENTRYPOINT ["dockerize",\
     "-wait","tcp://mariadb:3306",\
