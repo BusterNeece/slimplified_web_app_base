@@ -1,7 +1,7 @@
 #
 # Base image
 #
-FROM ubuntu:focal
+FROM ubuntu:rolling
 
 # Set time zone
 ENV TZ="UTC"
