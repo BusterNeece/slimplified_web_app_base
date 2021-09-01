@@ -1,247 +1,231 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App;
 
+use App\Console\Application;
+use App\Http\Factory\ResponseFactory;
 use App\Http\Factory\ServerRequestFactory;
+use Composer\Autoload\ClassLoader;
 use DI;
+use DI\Bridge\Slim\ControllerInvoker;
 use Doctrine\Common\Annotations\AnnotationRegistry;
-use Invoker;
-use Psr\Container\ContainerInterface;
-use Psr\Http\Message\ResponseFactoryInterface;
+use Invoker\Invoker;
+use Invoker\ParameterResolver\AssociativeArrayResolver;
+use Invoker\ParameterResolver\Container\TypeHintContainerResolver;
+use Invoker\ParameterResolver\DefaultValueResolver;
+use Invoker\ParameterResolver\ResolverChain;
+use Monolog\Registry;
+use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
 use Slim\App;
 use Slim\Factory\ServerRequestCreatorFactory;
-use Slim\Interfaces\CallableResolverInterface;
-use Slim\Interfaces\MiddlewareDispatcherInterface;
-use Slim\Interfaces\RouteCollectorInterface;
-use Slim\Interfaces\RouteResolverInterface;
+use const E_COMPILE_ERROR;
+use const E_CORE_ERROR;
+use const E_ERROR;
+use const E_PARSE;
+use const E_USER_ERROR;
 
 class AppFactory
 {
     /**
-     * @param object|null $autoloader The Composer Autoloader object.
-     * @param array $appSettings An array of settings to control the application.
-     * [
-     *    'base_dir' => '/path', // REQUIRED!
-     *    'temp_dir' => '/path', // Optional, defaults to $base_dir/../www_tmp
-     *    'views_dir' => '/path', // Optional, defaults to $base_dir/templates
-     *    'config_dir' => '/path', // Optional, defaults to $base_dir/config
-     *    'is_docker' => false, // Default TRUE
-     *    ... any other App-specific settings.
-     * ],
-     * @param array $diDefinitions An array of definitions to supply to the DI container.
+     * @param ClassLoader|null $autoloader
+     * @param array<string, mixed> $appEnvironment
+     * @param array<string, mixed> $diDefinitions
      *
-     * @return App
      */
-    public static function create(
-        $autoloader = null,
-        $appSettings = [],
-        $diDefinitions = []
+    public static function createApp(
+        ?ClassLoader $autoloader = null,
+        array $appEnvironment = [],
+        array $diDefinitions = []
     ): App {
-        // Register Annotation autoloader
-        if (null !== $autoloader) {
-            AnnotationRegistry::registerLoader([$autoloader, 'loadClass']);
+        $di = self::buildContainer($autoloader, $appEnvironment, $diDefinitions);
+        return self::buildAppFromContainer($di);
+    }
+
+    /**
+     * @param ClassLoader|null $autoloader
+     * @param array<string, mixed> $appEnvironment
+     * @param array<string, mixed> $diDefinitions
+     *
+     */
+    public static function createCli(
+        ?ClassLoader $autoloader = null,
+        array $appEnvironment = [],
+        array $diDefinitions = []
+    ): Application {
+        $di = self::buildContainer($autoloader, $appEnvironment, $diDefinitions);
+        self::buildAppFromContainer($di);
+
+        return $di->get(Application::class);
+    }
+
+    public static function buildAppFromContainer(DI\Container $container): App
+    {
+        ServerRequestCreatorFactory::setSlimHttpDecoratorsAutomaticDetection(false);
+        ServerRequestCreatorFactory::setServerRequestCreator(new ServerRequestFactory());
+
+        $app = new App(
+            responseFactory: new ResponseFactory(),
+            container: $container,
+        );
+        $container->set(App::class, $app);
+
+        $routeCollector = $app->getRouteCollector();
+
+        // Use the PHP-DI Bridge's action invocation helper.
+        $resolvers = [
+            // Inject parameters by name first
+            new AssociativeArrayResolver(),
+            // Then inject services by type-hints for those that weren't resolved
+            new TypeHintContainerResolver($container),
+            // Then fall back on parameters default values for optional route parameters
+            new DefaultValueResolver(),
+        ];
+
+        $invoker = new Invoker(new ResolverChain($resolvers), $container);
+        $controllerInvoker = new ControllerInvoker($invoker);
+
+        $routeCollector->setDefaultInvocationStrategy($controllerInvoker);
+
+        $environment = $container->get(Environment::class);
+        if ($environment->isProduction()) {
+            $routeCollector->setCacheFile($environment->getTempDirectory() . '/app_routes.cache.php');
         }
 
-        $settings = new Settings(self::buildSettings($appSettings));
-        Settings::setInstance($settings);
-
-        self::applyPhpSettings($settings);
-
-        $di = self::buildContainer($settings, $diDefinitions);
-
-        // Register static logger.
-        Logger::setInstance($di->get(LoggerInterface::class));
-
-        ServerRequestCreatorFactory::setSlimHttpDecoratorsAutomaticDetection(false);
-        ServerRequestCreatorFactory::setServerRequestCreator(new ServerRequestFactory);
-
-        $app = self::createFromContainer($di);
-        $di->set(App::class, $app);
-
-        self::updateRouteHandling($app);
-        self::buildRoutes($app);
+        $eventDispatcher = $container->get(EventDispatcherInterface::class);
+        $eventDispatcher->dispatch(new Event\BuildRoutes($app));
 
         return $app;
     }
 
     /**
-     * @param array $settings
+     * @param ClassLoader|null $autoloader
+     * @param array<string, mixed> $appEnvironment
+     * @param array<string, mixed> $diDefinitions
      *
-     * @return array
-     * @throws Exception\BootstrapException
-     */
-    protected static function buildSettings(array $settings): array
-    {
-        if (!isset($settings[Settings::BASE_DIR])) {
-            throw new Exception\BootstrapException('No base directory specified!');
-        }
-
-        if (!isset($settings[Settings::TEMP_DIR])) {
-            $settings[Settings::TEMP_DIR] = dirname($settings[Settings::BASE_DIR]) . '/www_tmp';
-        }
-
-        if (!isset($settings[Settings::CONFIG_DIR])) {
-            $settings[Settings::CONFIG_DIR] = $settings[Settings::BASE_DIR] . '/config';
-        }
-
-        if (!isset($settings[Settings::VIEWS_DIR])) {
-            $settings[Settings::VIEWS_DIR] = $settings[Settings::BASE_DIR] . '/templates';
-        }
-
-        if ($settings[Settings::IS_DOCKER]) {
-            $_ENV = getenv();
-        } elseif (file_exists($settings[Settings::BASE_DIR] . '/env.ini')) {
-            $_ENV = array_merge($_ENV, parse_ini_file($settings[Settings::BASE_DIR] . '/env.ini'));
-        }
-
-        if (!isset($settings[Settings::APP_ENV])) {
-            $settings[Settings::APP_ENV] = $_ENV['APPLICATION_ENV'] ?? Settings::ENV_PRODUCTION;
-        }
-
-        if (isset($_ENV['BASE_URL'])) {
-            $settings[Settings::BASE_URL] = $_ENV['BASE_URL'];
-        }
-
-        if (file_exists($settings[Settings::CONFIG_DIR] . '/settings.php')) {
-            $settingsFile = require($settings[Settings::CONFIG_DIR] . '/settings.php');
-
-            if (is_array($settingsFile)) {
-                $settings = array_merge($settings, $settingsFile);
-            }
-        }
-
-        return $settings;
-    }
-
-    /**
-     * @param Settings $settings
-     */
-    protected static function applyPhpSettings(Settings $settings): void
-    {
-        ini_set('display_startup_errors', !$settings->isProduction() ? 1 : 0);
-        ini_set('display_errors', !$settings->isProduction() ? 1 : 0);
-        ini_set('log_errors', 1);
-        ini_set('error_log',
-            $settings[Settings::IS_DOCKER] ? '/dev/stderr' : $settings[Settings::TEMP_DIR] . '/php_errors.log');
-        ini_set('error_reporting', E_ALL & ~E_NOTICE & ~E_WARNING & ~E_STRICT);
-        ini_set('session.use_only_cookies', 1);
-        ini_set('session.cookie_httponly', 1);
-        ini_set('session.cookie_lifetime', 86400);
-        ini_set('session.use_strict_mode', 1);
-
-        session_cache_limiter('');
-    }
-
-    /**
-     * @param Settings $settings
-     * @param array $diDefinitions
+     * @noinspection SummerTimeUnsafeTimeManipulationInspection
      *
-     * @return DI\Container
-     * @throws \Exception
      */
-    protected static function buildContainer(Settings $settings, array $diDefinitions = []): DI\Container
-    {
-        $containerBuilder = new DI\ContainerBuilder;
-        $containerBuilder->useAnnotations(true);
+    public static function buildContainer(
+        ?ClassLoader $autoloader = null,
+        array $appEnvironment = [],
+        array $diDefinitions = []
+    ): DI\Container {
+        // Register Annotation autoloader
+        if (null !== $autoloader) {
+            AnnotationRegistry::registerLoader([$autoloader, 'loadClass']);
+        }
+
+        $environment = self::buildEnvironment($appEnvironment);
+        Environment::setInstance($environment);
+
+        self::applyPhpSettings($environment);
+
+        // Override DI definitions for settings.
+        $diDefinitions[Environment::class] = $environment;
+
+        $containerBuilder = new DI\ContainerBuilder();
         $containerBuilder->useAutowiring(true);
 
-        if ($settings->isProduction()) {
-            $containerBuilder->enableCompilation($settings[Settings::TEMP_DIR]);
+        /*
+        $containerBuilder->enableDefinitionCache();
+        if ($environment->isProduction()) {
+            $containerBuilder->enableCompilation($environment->getTempDirectory());
         }
-
-        if (!isset($diDefinitions[Settings::class])) {
-            $diDefinitions[Settings::class] = $settings;
-            $diDefinitions['settings'] = DI\Get(Settings::class);
-        }
+        */
 
         $containerBuilder->addDefinitions($diDefinitions);
 
         // Check for services.php file and include it if one exists.
-        $config_dir = $settings[Settings::CONFIG_DIR];
+        $config_dir = $environment->getConfigDirectory();
         if (file_exists($config_dir . '/services.php')) {
             $containerBuilder->addDefinitions($config_dir . '/services.php');
         }
 
-        return $containerBuilder->build();
-    }
+        $di = $containerBuilder->build();
 
-    /**
-     * @param ContainerInterface $container
-     *
-     * @return App
-     */
-    protected static function createFromContainer(ContainerInterface $container): App
-    {
-        $responseFactory = $container->has(ResponseFactoryInterface::class)
-            ? $container->get(ResponseFactoryInterface::class)
-            : new Http\Factory\ResponseFactory;
+        $logger = $di->get(LoggerInterface::class);
 
-        $callableResolver = $container->has(CallableResolverInterface::class)
-            ? $container->get(CallableResolverInterface::class)
-            : null;
+        register_shutdown_function(
+            static function (LoggerInterface $logger): void {
+                $error = error_get_last();
+                if (null === $error) {
+                    return;
+                }
 
-        $routeCollector = $container->has(RouteCollectorInterface::class)
-            ? $container->get(RouteCollectorInterface::class)
-            : null;
+                $errno = $error["type"] ?? E_ERROR;
+                $errfile = $error["file"] ?? 'unknown';
+                $errline = $error["line"] ?? 0;
+                $errstr = $error["message"] ?? 'Shutdown';
 
-        $routeResolver = $container->has(RouteResolverInterface::class)
-            ? $container->get(RouteResolverInterface::class)
-            : null;
-
-        $middlewareDispatcher = $container->has(MiddlewareDispatcherInterface::class)
-            ? $container->get(MiddlewareDispatcherInterface::class)
-            : null;
-
-        return new App(
-            $responseFactory,
-            $container,
-            $callableResolver,
-            $routeCollector,
-            $routeResolver,
-            $middlewareDispatcher
+                if ($errno &= E_PARSE | E_ERROR | E_USER_ERROR | E_CORE_ERROR | E_COMPILE_ERROR) {
+                    $logger->critical(
+                        sprintf(
+                            'Fatal error: %s in %s on line %d',
+                            $errstr,
+                            $errfile,
+                            $errline
+                        )
+                    );
+                }
+            },
+            $logger
         );
+
+        Registry::addLogger($logger, 'app', true);
+
+        return $di;
     }
 
     /**
-     * @param App $app
+     * @param array<string, mixed> $environment
      */
-    protected static function updateRouteHandling(App $app): void
+    public static function buildEnvironment(array $environment = []): Environment
     {
-        $di = $app->getContainer();
-        $routeCollector = $app->getRouteCollector();
-
-        /** @var Settings $settings */
-        $settings = $di->get(Settings::class);
-
-        // Use the PHP-DI Bridge's action invocation helper.
-        $resolvers = [
-            // Inject parameters by name first
-            new Invoker\ParameterResolver\AssociativeArrayResolver(),
-            // Then inject services by type-hints for those that weren't resolved
-            new Invoker\ParameterResolver\Container\TypeHintContainerResolver($di),
-            // Then fall back on parameters default values for optional route parameters
-            new Invoker\ParameterResolver\DefaultValueResolver(),
-        ];
-
-        $invoker = new Invoker\Invoker(new Invoker\ParameterResolver\ResolverChain($resolvers), $di);
-        $controllerInvoker = new DI\Bridge\Slim\ControllerInvoker($invoker);
-
-        $routeCollector->setDefaultInvocationStrategy($controllerInvoker);
-
-        if ($settings->isProduction()) {
-            $routeCollector->setCacheFile($settings[Settings::TEMP_DIR] . '/app_routes.cache.php');
+        if (!isset($environment[Environment::BASE_DIR])) {
+            throw new Exception\BootstrapException('No base directory specified!');
         }
+
+        $environment[Environment::TEMP_DIR] ??= dirname($environment[Environment::BASE_DIR]) . '/www_tmp';
+        $environment[Environment::CONFIG_DIR] ??= $environment[Environment::BASE_DIR] . '/config';
+        $environment[Environment::VIEWS_DIR] ??= $environment[Environment::BASE_DIR] . '/templates';
+        $environment[Environment::UPLOADS_DIR] ??= dirname($environment[Environment::BASE_DIR]) . '/uploads';
+
+        if (file_exists($environment[Environment::BASE_DIR] . '/env.ini')) {
+            $envIni = parse_ini_file($environment[Environment::BASE_DIR] . '/env.ini');
+            if (false !== $envIni) {
+                $_ENV = array_merge($_ENV, $envIni);
+            }
+        } else {
+            $_ENV = getenv();
+        }
+
+        $environment = array_merge(array_filter($_ENV), $environment);
+
+        return new Environment($environment);
     }
 
-    /**
-     * @param App $app
-     */
-    protected static function buildRoutes(App $app): void
+    protected static function applyPhpSettings(Environment $environment): void
     {
-        $di = $app->getContainer();
+        error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_STRICT);
 
-        /** @var EventDispatcher $dispatcher */
-        $dispatcher = $di->get(EventDispatcher::class);
-        $dispatcher->dispatch(new Event\BuildRoutes($app));
+        $displayStartupErrors = (!$environment->isProduction() || $environment->isCli())
+            ? '1'
+            : '0';
+        ini_set('display_startup_errors', $displayStartupErrors);
+        ini_set('display_errors', $displayStartupErrors);
+
+        ini_set('log_errors', '1');
+        ini_set('error_log', '/dev/stderr');
+        ini_set('session.use_only_cookies', '1');
+        ini_set('session.cookie_httponly', '1');
+        ini_set('session.cookie_lifetime', '86400');
+        ini_set('session.use_strict_mode', '1');
+
+        date_default_timezone_set('UTC');
+
+        session_cache_limiter('');
     }
 }

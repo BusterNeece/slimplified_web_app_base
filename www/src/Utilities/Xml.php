@@ -12,7 +12,7 @@ class Xml
      *
      * @return array
      */
-    public static function xmlToArray($xml): array
+    public static function xmlToArray(string $xml): array
     {
         $values = $index = $array = [];
         $parser = xml_parser_create();
@@ -35,7 +35,7 @@ class Xml
      *
      * @return mixed
      */
-    public static function arrayToXml($array)
+    public static function arrayToXml(array $array): mixed
     {
         $xml_info = new SimpleXMLElement('<?xml version="1.0"?><return></return>');
         self::_arr_to_xml($array, $xml_info);
@@ -65,13 +65,12 @@ class Xml
 
                 case 'open':
                     $name = $values[$i]['tag'];
-                    $size = isset($child[$name]) ? sizeof($child[$name]) : 0;
+                    $size = isset($child[$name]) ? count($child[$name]) : 0;
                     $child[$name][$size] = self::_struct_to_array($values, $i);
                     break;
 
                 case 'close':
                     return $child;
-                    break;
             }
         }
 

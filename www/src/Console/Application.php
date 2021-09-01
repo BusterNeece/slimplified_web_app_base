@@ -14,7 +14,7 @@ class Application extends \Silly\Edition\PhpDi\Application
      *
      * @return array [$return_code, $return_output]
      */
-    public function runCommandWithArgs($command, array $args = []): array
+    public function runCommandWithArgs(string $command, array $args = []): array
     {
         $input = new ArrayInput(array_merge(['command' => $command], $args));
         $input->setInteractive(false);

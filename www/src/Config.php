@@ -1,32 +1,33 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App;
 
 use const EXTR_OVERWRITE;
 
 class Config
 {
-    protected string $_base_folder;
+    protected string $baseFolder;
 
-    public function __construct($base_folder)
+    public function __construct(Environment $environment)
     {
-        if (!is_dir($base_folder)) {
-            throw new Exception("Invalid base folder for configurations.");
-        }
-
-        $this->_base_folder = $base_folder;
+        $this->baseFolder = $environment->getConfigDirectory();
     }
 
     /**
      * @param string $name
      * @param array $inject_vars Variables to pass into the scope of the configuration.
      *
-     * @return array
+     * @return array<mixed>
+     * @noinspection PhpIncludeInspection
+     * @noinspection UselessUnsetInspection
      */
-    public function get($name, $inject_vars = []): array
+    public function get(string $name, array $inject_vars = []): array
     {
-        $path = $this->_getPath($name);
+        $path = $this->getPath($name);
 
-        if (file_exists($path)) {
+        if (is_file($path)) {
             unset($name);
             extract($inject_vars, EXTR_OVERWRITE);
             unset($inject_vars);
@@ -41,23 +42,19 @@ class Config
      * Return the configuration path resolved by the specified name.
      *
      * @param string $name
-     *
-     * @return string
      */
-    public function _getPath($name)
+    public function getPath(string $name): string
     {
-        return $this->_base_folder . DIRECTORY_SEPARATOR . str_replace(['.', '..'], ['', ''], $name) . '.php';
+        return $this->baseFolder . DIRECTORY_SEPARATOR . str_replace(['.', '..'], ['', ''], $name) . '.php';
     }
 
     /**
      * Indicate whether a given configuration file name exists.
      *
      * @param string $name
-     *
-     * @return bool
      */
-    public function has($name): bool
+    public function has(string $name): bool
     {
-        return file_exists($this->_getPath($name));
+        return file_exists($this->getPath($name));
     }
 }

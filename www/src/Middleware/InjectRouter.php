@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Middleware;
 
 use App\Http\RouterInterface;
@@ -13,24 +16,20 @@ use Psr\Http\Server\RequestHandlerInterface;
  */
 class InjectRouter implements MiddlewareInterface
 {
-    protected RouterInterface $router;
-
-    public function __construct(RouterInterface $router)
-    {
-        $this->router = $router;
+    public function __construct(
+        protected RouterInterface $router
+    ) {
     }
 
     /**
      * @param ServerRequestInterface $request
      * @param RequestHandlerInterface $handler
-     *
-     * @return ResponseInterface
      */
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        $this->router->setCurrentRequest($request);
+        $router = $this->router->withRequest($request);
 
-        $request = $request->withAttribute(ServerRequest::ATTR_ROUTER, $this->router);
+        $request = $request->withAttribute(ServerRequest::ATTR_ROUTER, $router);
 
         return $handler->handle($request);
     }

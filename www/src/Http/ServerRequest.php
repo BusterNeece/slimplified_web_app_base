@@ -53,7 +53,7 @@ final class ServerRequest extends \Slim\Http\ServerRequest
      * @return mixed
      * @throws Exception\InvalidRequestAttribute
      */
-    protected function getAttributeOfClass($attr, $class_name)
+    private function getAttributeOfClass(string $attr, string $class_name): mixed
     {
         $object = $this->serverRequest->getAttribute($attr);
 

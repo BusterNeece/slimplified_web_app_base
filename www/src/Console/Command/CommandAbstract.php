@@ -9,7 +9,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 abstract class CommandAbstract
 {
     /** @var Application */
-    protected $application;
+    protected Application $application;
 
     /**
      * @param Application $application
@@ -34,7 +34,7 @@ abstract class CommandAbstract
      *
      * @throws Exception
      */
-    protected function runCommand(OutputInterface $output, $command_name, $command_args = [])
+    protected function runCommand(OutputInterface $output, string $command_name, array $command_args = []): void
     {
         $command = $this->getApplication()->find($command_name);
 

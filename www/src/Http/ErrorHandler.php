@@ -1,8 +1,8 @@
 <?php
 namespace App\Http;
 
+use App\Environment;
 use App\Exception;
-use App\Settings;
 use Monolog\Logger;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -19,19 +19,19 @@ class ErrorHandler extends \Slim\Handlers\ErrorHandler
 
     protected string $loggerLevel = LogLevel::ERROR;
 
-    protected Router $router;
+    protected RouterInterface $router;
 
-    protected Settings $settings;
+    protected Environment $environment;
 
     public function __construct(
         App $app,
         Logger $logger,
-        Router $router,
-        Settings $settings
+        RouterInterface $router,
+        Environment $environment
     ) {
         parent::__construct($app->getCallableResolver(), $app->getResponseFactory(), $logger);
 
-        $this->settings = $settings;
+        $this->environment = $environment;
         $this->router = $router;
     }
 
@@ -48,7 +48,7 @@ class ErrorHandler extends \Slim\Handlers\ErrorHandler
             $this->loggerLevel = LogLevel::WARNING;
         }
 
-        $this->showDetailed = (!$this->settings->isProduction() && !in_array($this->loggerLevel,
+        $this->showDetailed = (!$this->environment->isProduction() && !in_array($this->loggerLevel,
                 [LogLevel::DEBUG, LogLevel::INFO, LogLevel::NOTICE], true));
         $this->returnJson = $this->shouldReturnJson($request);
 
@@ -59,7 +59,7 @@ class ErrorHandler extends \Slim\Handlers\ErrorHandler
     {
         $xhr = $req->getHeaderLine('X-Requested-With') === 'XMLHttpRequest';
 
-        if ($xhr || $this->settings->isCli() || $this->settings->isTesting()) {
+        if ($xhr || $this->environment->isCli() || $this->environment->isTesting()) {
             return true;
         }
 

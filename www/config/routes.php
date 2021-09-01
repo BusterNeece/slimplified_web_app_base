@@ -1,5 +1,8 @@
 <?php
-return function(\App\App $app)
+
+use Slim\App;
+
+return function(App $app)
 {
     // Application routes
 };

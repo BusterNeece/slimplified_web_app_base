@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Session;
 
 use App\Traits\AvailableStaticallyTrait;
@@ -20,11 +23,9 @@ class Flash
 
     protected ?array $messages = null;
 
-    protected SessionInterface $session;
-
-    public function __construct(SessionInterface $session)
-    {
-        $this->session = $session;
+    public function __construct(
+        protected SessionInterface $session
+    ) {
     }
 
     /**
@@ -34,7 +35,7 @@ class Flash
      * @param string $level
      * @param bool $saveInSession
      */
-    public function alert($message, $level = self::INFO, $saveInSession = true): void
+    public function alert(string $message, string $level = self::INFO, bool $saveInSession = true): void
     {
         $this->addMessage($message, $level, $saveInSession);
     }
@@ -46,7 +47,7 @@ class Flash
      * @param string $level
      * @param bool $saveInSession
      */
-    public function addMessage($message, $level = self::INFO, $saveInSession = true): void
+    public function addMessage(string $message, string $level = self::INFO, bool $saveInSession = true): void
     {
         $colorChart = [
             'green' => self::SUCCESS,
@@ -66,9 +67,7 @@ class Flash
             'color' => $colorChart[$level] ?? $level,
         ];
 
-        if (null === $this->messages) {
-            $this->getMessages();
-        }
+        $this->getMessages();
         $this->messages[] = $messageRow;
 
         if ($saveInSession) {
@@ -81,8 +80,6 @@ class Flash
 
     /**
      * Indicate whether messages are currently pending display.
-     *
-     * @return bool
      */
     public function hasMessages(): bool
     {
@@ -93,7 +90,7 @@ class Flash
     /**
      * Return all messages, removing them from the internal storage in the process.
      *
-     * @return array
+     * @return mixed[]
      */
     public function getMessages(): array
     {

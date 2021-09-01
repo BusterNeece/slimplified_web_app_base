@@ -1,8 +1,11 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Session;
 
+use App\Environment;
 use App\Exception;
-use App\Settings;
 use App\Traits\AvailableStaticallyTrait;
 use Mezzio\Session\SessionInterface;
 
@@ -13,14 +16,10 @@ class Csrf
     public const CODE_LENGTH = 10;
     public const DEFAULT_NAMESPACE = 'general';
 
-    protected SessionInterface $session;
-
-    protected Settings $settings;
-
-    public function __construct(SessionInterface $session, Settings $settings)
-    {
-        $this->session = $session;
-        $this->settings = $settings;
+    public function __construct(
+        protected SessionInterface $session,
+        protected Environment $environment
+    ) {
     }
 
     /**
@@ -31,14 +30,15 @@ class Csrf
      * a CSRF token will last the time specified in $this->_csrf_lifetime.
      *
      * @param string $namespace
-     *
-     * @return null|string
      */
-    public function generate(string $namespace = self::DEFAULT_NAMESPACE): ?string
+    public function generate(string $namespace = self::DEFAULT_NAMESPACE): string
     {
         $sessionKey = $this->getSessionIdentifier($namespace);
         if ($this->session->has($sessionKey)) {
-            return $this->session->get($sessionKey);
+            $csrf = $this->session->get($sessionKey);
+            if (!empty($csrf)) {
+                return (string)$csrf;
+            }
         }
 
         $key = $this->randomString();
@@ -57,7 +57,7 @@ class Csrf
      */
     public function verify(string $key, string $namespace = self::DEFAULT_NAMESPACE): void
     {
-        if ($this->settings->isTesting()) {
+        if ($this->environment->isTesting()) {
             return;
         }
 
@@ -76,7 +76,7 @@ class Csrf
 
         $sessionKey = $this->session->get($sessionIdentifier);
 
-        if (0 !== strcmp($key, $sessionKey)) {
+        if (0 !== strcmp($key, (string)$sessionKey)) {
             throw new Exception\CsrfValidationException('Invalid CSRF token supplied.');
         }
     }

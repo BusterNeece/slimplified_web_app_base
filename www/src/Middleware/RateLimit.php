@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Middleware;
 
 use App\Http\ServerRequest;
@@ -10,29 +13,17 @@ use Psr\Http\Server\RequestHandlerInterface;
  */
 class RateLimit
 {
-    /** @var string */
-    protected $rl_group;
-
-    /** @var int */
-    protected $rl_timeout;
-
-    /** @var int */
-    protected $rl_interval;
-
     public function __construct(
-        string $rl_group = 'default',
-        int $rl_timeout = 5,
-        int $rl_interval = 2
+        protected string $rl_group = 'default',
+        protected int $rl_interval = 5,
+        protected int $rl_limit = 2
     ) {
-        $this->rl_group = $rl_group;
-        $this->rl_timeout = $rl_timeout;
-        $this->rl_interval = $rl_interval;
     }
 
     public function __invoke(ServerRequest $request, RequestHandlerInterface $handler): ResponseInterface
     {
         $rateLimit = $request->getRateLimit();
-        $rateLimit->checkRateLimit($request, $this->rl_group, $this->rl_timeout, $this->rl_interval);
+        $rateLimit->checkRequestRateLimit($request, $this->rl_group, $this->rl_interval, $this->rl_limit);
 
         return $handler->handle($request);
     }

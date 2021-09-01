@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Middleware;
 
 use App\Http\ServerRequest;
@@ -13,18 +16,14 @@ use Psr\Http\Server\RequestHandlerInterface;
  */
 class InjectRateLimit implements MiddlewareInterface
 {
-    protected RateLimit $rateLimit;
-
-    public function __construct(RateLimit $rateLimit)
-    {
-        $this->rateLimit = $rateLimit;
+    public function __construct(
+        protected RateLimit $rateLimit
+    ) {
     }
 
     /**
      * @param ServerRequestInterface $request
      * @param RequestHandlerInterface $handler
-     *
-     * @return ResponseInterface
      */
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {

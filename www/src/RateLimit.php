@@ -1,58 +1,77 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App;
 
 use App\Http\ServerRequest;
-use Redis;
+use Psr\Cache\CacheItemPoolInterface;
+use Symfony\Component\Cache\Adapter\ProxyAdapter;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Symfony\Component\RateLimiter\Storage\CacheStorage;
 
 class RateLimit
 {
-    public const NAMESPACE_SEPARATOR = '|';
+    protected CacheItemPoolInterface $psr6Cache;
 
-    protected Redis $redis;
-
-    protected Settings $settings;
-
-    public function __construct(Redis $redis, Settings $settings)
-    {
-        $this->redis = $redis;
-        $this->settings = $settings;
+    public function __construct(
+        protected LockFactory $lockFactory,
+        protected Environment $environment,
+        CacheItemPoolInterface $cacheItemPool
+    ) {
+        $this->psr6Cache = new ProxyAdapter($cacheItemPool, 'ratelimit.');
     }
 
     /**
      * @param ServerRequest $request
-     * @param string $group_name
-     * @param int $timeout
+     * @param string $groupName
      * @param int $interval
+     * @param int $limit
      *
-     * @return bool
+     * @throws Exception\RateLimitExceededException
+     */
+    public function checkRequestRateLimit(
+        ServerRequest $request,
+        string $groupName,
+        int $interval = 5,
+        int $limit = 2
+    ): void {
+        if ($this->environment->isTesting() || $this->environment->isCli()) {
+            return;
+        }
+
+        $ipKey = str_replace([':', '.'], '_', $request->getIp());
+        $this->checkRateLimit($groupName, $ipKey, $interval, $limit);
+    }
+
+    /**
+     * @param string $groupName
+     * @param string $key
+     * @param int $interval
+     * @param int $limit
+     *
      * @throws Exception\RateLimitExceededException
      */
     public function checkRateLimit(
-        ServerRequest $request,
-        string $group_name = 'default',
-        int $timeout = 5,
-        int $interval = 2
-    ): bool {
-        if ($this->settings->isTesting() || $this->settings->isCli()) {
-            return true;
+        string $groupName,
+        string $key,
+        int $interval = 5,
+        int $limit = 2
+    ): void {
+        $cacheStore = new CacheStorage($this->psr6Cache);
+
+        $config = [
+            'id' => 'ratelimit.' . $groupName,
+            'policy' => 'sliding_window',
+            'interval' => $interval . ' seconds',
+            'limit' => $limit,
+        ];
+
+        $rateLimiterFactory = new RateLimiterFactory($config, $cacheStore, $this->lockFactory);
+        $rateLimiter = $rateLimiterFactory->create($key);
+
+        if (false === $rateLimiter->consume()->isAccepted()) {
+            throw new Exception\RateLimitExceededException();
         }
-
-        $ip = $request->getIp();
-        $cache_name = 'rate_limit' . self::NAMESPACE_SEPARATOR . $group_name . self::NAMESPACE_SEPARATOR . str_replace(':',
-                '.', $ip);
-
-        $result = $this->redis->get($cache_name);
-
-        if ($result !== false) {
-            if ((int)$result + 1 > $interval) {
-                throw new Exception\RateLimitExceededException();
-            }
-
-            $this->redis->incr($cache_name);
-        } else {
-            $this->redis->setex($cache_name, $timeout, 1);
-        }
-
-        return true;
     }
 }

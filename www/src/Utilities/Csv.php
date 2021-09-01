@@ -11,7 +11,7 @@ class Csv
      *
      * @return string
      */
-    public static function arrayToCsv($table_data, $headers_first_row = true): string
+    public static function arrayToCsv(array $table_data, bool $headers_first_row = true): string
     {
         $final_display = [];
         $row_count = 0;

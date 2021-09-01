@@ -1,12 +1,13 @@
 <?php
 namespace App\Doctrine;
 
+use App\Environment;
 use App\Normalizer\DoctrineEntityNormalizer;
-use App\Settings;
 use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\Serializer;
 
 class Repository
@@ -19,19 +20,19 @@ class Repository
 
     protected Serializer $serializer;
 
-    protected Settings $settings;
+    protected Environment $environment;
 
     protected LoggerInterface $logger;
 
     public function __construct(
         EntityManagerInterface $em,
         Serializer $serializer,
-        Settings $settings,
+        Environment $environment,
         LoggerInterface $logger
     ) {
         $this->em = $em;
         $this->serializer = $serializer;
-        $this->settings = $settings;
+        $this->environment = $environment;
         $this->logger = $logger;
 
         if (!isset($this->entityClass)) {
@@ -67,7 +68,7 @@ class Repository
      *
      * @return array
      */
-    public function fetchArray($cached = true, $order_by = null, $order_dir = 'ASC'): array
+    public function fetchArray(bool $cached = true, $order_by = null, string $order_dir = 'ASC'): array
     {
         $qb = $this->em->createQueryBuilder()
             ->select('e')
@@ -90,7 +91,7 @@ class Repository
      *
      * @return array
      */
-    public function fetchSelect($add_blank = false, Closure $display = null, $pk = 'id', $order_by = 'name'): array
+    public function fetchSelect(bool $add_blank, Closure $display = null, string $pk = 'id', string $order_by = 'name'): array
     {
         $select = [];
 
@@ -113,8 +114,7 @@ class Repository
         // Assemble select values and, if necessary, call $display callback.
         foreach ((array)$results as $result) {
             $key = $result[$pk];
-            $value = ($display === null) ? $result['name'] : $display($result);
-            $select[$key] = $value;
+            $select[$key] = ($display === null) ? $result['name'] : $display($result);
         }
 
         return $select;
@@ -128,10 +128,10 @@ class Repository
      *
      * @return object
      */
-    public function fromArray($entity, array $source)
+    public function fromArray(object $entity, array $source): object
     {
         return $this->serializer->denormalize($source, get_class($entity), null, [
-            DoctrineEntityNormalizer::OBJECT_TO_POPULATE => $entity,
+            AbstractNormalizer::OBJECT_TO_POPULATE => $entity,
         ]);
     }
 
@@ -144,7 +144,7 @@ class Repository
      *
      * @return array
      */
-    public function toArray($entity, $deep = false, $form_mode = false): array
+    public function toArray(object $entity, bool $deep, bool $form_mode): array
     {
         return $this->serializer->normalize($entity, null, [
             DoctrineEntityNormalizer::NORMALIZE_TO_IDENTIFIERS => $form_mode,

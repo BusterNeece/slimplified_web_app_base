@@ -32,7 +32,7 @@ class Exception extends \Exception
     /**
      * @param string $message
      */
-    public function setMessage($message): void
+    public function setMessage(string $message): void
     {
         $this->message = $message;
     }
@@ -51,7 +51,7 @@ class Exception extends \Exception
      *
      * @param string|null $message
      */
-    public function setFormattedMessage($message): void
+    public function setFormattedMessage(?string $message): void
     {
         $this->formattedMessage = $message;
     }
@@ -73,10 +73,10 @@ class Exception extends \Exception
     }
 
     /**
-     * @param string|int $legend
+     * @param int|string $legend
      * @param mixed $data
      */
-    public function addExtraData($legend, $data): void
+    public function addExtraData(int|string $legend, mixed $data): void
     {
         if (is_array($data)) {
             $this->extraData[$legend] = $data;
@@ -92,10 +92,10 @@ class Exception extends \Exception
     }
 
     /**
-     * @param string|int $key
+     * @param int|string $key
      * @param mixed $data
      */
-    public function addLoggingContext($key, $data): void
+    public function addLoggingContext(int|string $key, mixed $data): void
     {
         $this->loggingContext[$key] = $data;
     }

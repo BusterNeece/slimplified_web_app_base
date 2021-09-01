@@ -34,7 +34,7 @@ class DecoratedEntityManager extends EntityManagerDecorator
      *
      * @return T
      */
-    public function refetch($entity)
+    public function refetch(mixed $entity)
     {
         $metadata = $this->wrapped->getClassMetadata(get_class($entity));
         $freshValue = $this->wrapped->find($metadata->getName(), $metadata->getIdentifierValues($entity));
