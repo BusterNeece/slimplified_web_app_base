@@ -23,13 +23,16 @@ jobs:
           tools: composer:v2, cs2pr
 
       - name : Run Composer install
+        working-directory: www
         run : |
           composer install --no-interaction
 
       - name : Run PHP Linter
+        working-directory: www
         run : |
           vendor/bin/parallel-lint . --exclude vendor --checkstyle | cs2pr
 
       - name : Run PHPStan
+        working-directory: www
         run : |
           vendor/bin/phpstan analyze --error-format=checkstyle | cs2pr
